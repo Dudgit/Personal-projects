@@ -1,3 +1,7 @@
 001 dog class
 002/data
 002/runs
+003/data
+003/data_all
+__pycache__
+output
