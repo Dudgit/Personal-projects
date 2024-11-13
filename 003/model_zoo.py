@@ -75,16 +75,17 @@ class Animal2(nn.Module):
         
         self.fc1 = nn.Linear(64*modifier*modifier, 512)
         self.act1 = nn.ReLU()
-        self.dropout1 = nn.Dropout(0.3)
+        self.bnorm = nn.BatchNorm1d(512)
+        #self.dropout1 = nn.Dropout(0.3)
         
-        #self.fc2 = nn.Linear(256, 128)
-        #self.act2 = nn.ReLU()
+        self.fc2 = nn.Linear(512, 256)
+        self.act2 = nn.ReLU()
         #self.dropout2 = nn.Dropout(0.3)
 
-        #self.fc3 = nn.Linear(128, 128)
-        #self.act3 = nn.ReLU()
-        #self.dropout3 = nn.Dropout(0.3)
-        self.outp = nn.Linear(512, num_classes)
+        self.fc3 = nn.Linear(256, 128)
+        self.act3 = nn.ReLU()
+        self.dropout3 = nn.Dropout(0.3)
+        self.outp = nn.Linear(1024, num_classes)
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
@@ -96,16 +97,16 @@ class Animal2(nn.Module):
         x = self.flatten(x)
         x = self.fc1(x)
         x = self.act1(x)
-        x = self.dropout1(x)
+        x = self.bnorm(x)
+        #x = self.dropout1(x)
 
-        #x = self.fc2(x)
-        #x = self.act2(x)
+        x = self.fc2(x)
+        x = self.act2(x)
         #x = self.dropout2(x)
 
-        #x = self.fc3(x)
-        #x = self.act3(x)
-        #x = self.dropout3(x)
-
+        x = self.fc3(x)
+        x = self.act3(x)
+        x = self.dropout3(x)
         x = self.outp(x)
         x = self.softmax(x)
         return x
@@ -141,8 +142,6 @@ class Animal2(nn.Module):
             self.train()
             train_loss = 0.0
             train_accs = 0.0
-            val_accs = 0.0
-            val_losses = 0.0
             for trainingStep, (images, labels) in enumerate(train_loader):
                 print(f'Progeression is :{trainingStep*100/trainsteps:.3f}%',end='\r')
                 images = images.to(device)
