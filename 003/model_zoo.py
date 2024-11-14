@@ -47,7 +47,7 @@ class convBlock2(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
         self.batchnorm = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU()
+        self.relu = nn.GELU()
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2) if pool else None
         self.dropout = nn.Dropout(0.3) if dropout else None
 
@@ -68,22 +68,22 @@ class Animal2(nn.Module):
         self.conv1 = convBlock2(in_channels, 64)
         self.conv2 = convBlock2(64, 64, pool=True,dropout=True)
         self.conv3 = convBlock2(64, 64, pool=True,dropout=True)
-        self.conv4 = convBlock2(64, 64, pool=True,dropout=True)
+        #self.conv4 = convBlock2(64, 64, pool=True,dropout=True)
         #self.conv5 = convBlock2(64, 64, pool=True,dropout=True)
         self.flatten = nn.Flatten()
-        modifier = imageSize//2**3
+        modifier = imageSize//2**2
         
-        self.fc1 = nn.Linear(64*modifier*modifier, 512)
+        self.fc1 = nn.Linear(64*modifier*modifier, 1024)
         self.act1 = nn.ReLU()
-        self.bnorm = nn.BatchNorm1d(512)
+        #self.bnorm = nn.BatchNorm1d(512)
         #self.dropout1 = nn.Dropout(0.3)
         
-        self.fc2 = nn.Linear(512, 256)
-        self.act2 = nn.ReLU()
+        #self.fc2 = nn.Linear(1024, 256)
+        #self.act2 = nn.ReLU()
         #self.dropout2 = nn.Dropout(0.3)
 
-        self.fc3 = nn.Linear(256, 128)
-        self.act3 = nn.ReLU()
+        #self.fc3 = nn.Linear(256, 128)
+        #self.act3 = nn.ReLU()
         self.dropout3 = nn.Dropout(0.3)
         self.outp = nn.Linear(1024, num_classes)
         self.softmax = nn.Softmax(dim=1)
@@ -92,20 +92,20 @@ class Animal2(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = self.conv4(x)
-        
+        #x = self.conv4(x)
+        #x = self.conv5(x)
         x = self.flatten(x)
         x = self.fc1(x)
         x = self.act1(x)
-        x = self.bnorm(x)
+        #x = self.bnorm(x)
         #x = self.dropout1(x)
 
-        x = self.fc2(x)
-        x = self.act2(x)
+        #x = self.fc2(x)
+        #x = self.act2(x)
         #x = self.dropout2(x)
 
-        x = self.fc3(x)
-        x = self.act3(x)
+        #x = self.fc3(x)
+        #x = self.act3(x)
         x = self.dropout3(x)
         x = self.outp(x)
         x = self.softmax(x)
