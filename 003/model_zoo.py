@@ -4,7 +4,7 @@ from utils import imageSize
 import matplotlib.pyplot as plt
 classNames = ['cheetach', 'fox', 'hyena', 'lion', 'tiger', 'wolf']
 @torch.no_grad()
-def drawConfusionMatrix(allLabels,allPreds,writer,epoch,num_classes):
+def drawConfusionMatrix(allLabels,allPreds,writer,epoch,num_classes,traintype='train'):
     confusionMatrix = torch.zeros(num_classes,num_classes)
     for labels,preds in zip(allLabels,allPreds):
         for label,pred in zip(labels,preds):
@@ -19,7 +19,7 @@ def drawConfusionMatrix(allLabels,allPreds,writer,epoch,num_classes):
     plt.colorbar()
     plt.yticks(range(num_classes), classNames)
     plt.xticks(range(num_classes), classNames, rotation=45)
-    writer.add_figure('Confusion Matrix', plt.gcf(), epoch)
+    writer.add_figure('Confusion Matrix/'+traintype, plt.gcf(), epoch)
 
 def writClassAccuracies(allLabels,allPreds,writer,epoch,num_classes,trainOrVal):
     classCorrect = torch.zeros(num_classes)
@@ -78,7 +78,7 @@ class convBlock2(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
         self.batchnorm = nn.BatchNorm2d(out_channels)
-        self.relu = nn.GELU()
+        self.relu = nn.ReLU()
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2) if pool else None
         self.dropout = nn.Dropout(0.3) if dropout else None
 
@@ -97,8 +97,8 @@ class Animal2(nn.Module):
     def __init__(self, in_channels, num_classes):
         super().__init__()
         self.conv1 = convBlock2(in_channels, 32)
-        self.conv2 = convBlock2(32, 32, pool=True,dropout=True)
-        self.conv3 = convBlock2(32, 32, pool=True,dropout=True)
+        self.conv2 = convBlock2(32, 32, pool=True)
+        self.conv3 = convBlock2(32, 32, pool=True)
         self.flatten = nn.Flatten()
         modifier = imageSize//2**2
         
@@ -148,6 +148,7 @@ class Animal2(nn.Module):
             writer.add_scalar('Accuracy/val_epoch', val_accs/valSteps, epoch)
             writer.add_scalar('Loss/val_epoch', val_losses/valSteps, epoch)
             writClassAccuracies(allLabels,allPreds,writer,epoch,num_classes,'val_epoch')
+            drawConfusionMatrix(allLabels,allPreds,writer,epoch,num_classes,traintype='validation')
         print(f'Validation Loss: {val_losses/valSteps} Validation Accuracy: {val_accs/valSteps}')
 
     def fit(self, train_loader, val_loader, epochs, optimizer, criterion,device,writer,accMetric,num_classes,init_epoch=0):
