@@ -10,4 +10,4 @@ matplotlib.rcParams['ytick.labelsize'] = 16
 matplotlib.rcParams['figure.titlesize'] = 22
 matplotlib.rcParams["axes.grid"] = True
 
-imageSize = 128
+imageSize = 300
