@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from utils import imageSize
 import matplotlib.pyplot as plt
+import lightning.pytorch as pl
+import torch.nn.functional as F
 classNames = ['cheetach', 'fox', 'hyena', 'lion', 'tiger', 'wolf']
 @torch.no_grad()
 def drawConfusionMatrix(allLabels,allPreds,writer,epoch,num_classes,traintype='train'):
@@ -78,7 +80,7 @@ class convBlock2(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
         self.batchnorm = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU()
+        self.relu = nn.GELU()
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2) if pool else None
         self.dropout = nn.Dropout(0.3) if dropout else None
 
@@ -96,20 +98,20 @@ class convBlock2(nn.Module):
 class Animal2(nn.Module):
     def __init__(self, in_channels, num_classes):
         super().__init__()
-        self.conv1 = convBlock2(in_channels, 32)
+        self.conv1 = convBlock2(in_channels, 32, pool=True)
         self.conv2 = convBlock2(32, 32, pool=True)
         self.conv3 = convBlock2(32, 32, pool=True)
         self.flatten = nn.Flatten()
-        modifier = imageSize//2**2
+        modifier = imageSize//2**3
         
-        self.fc = nn.Linear(32*modifier*modifier, 1024)
+        self.fc = nn.Linear(32*modifier*modifier, 512)
         self.act = nn.ReLU()
         self.dropout = nn.Dropout(0.3)
-        self.outp = nn.Linear(1024, num_classes)
+        self.outp = nn.Linear(512, num_classes)
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
-        x = self.conv1(x)
+        x = self.act(self.conv1(x))
         x = self.conv2(x)
         x = self.conv3(x)
 
@@ -188,3 +190,109 @@ class Animal2(nn.Module):
                 writer.add_scalar('Accuracy/train_epoch', train_accs/trainsteps, epoch)
             print(f'Training Loss: {train_loss/trainsteps:.4f} Training Accuracy: {train_accs/trainsteps:.4f}')
             self.validation_step(val_loader,criterion,device,accMetric,writer,epoch,num_classes)
+
+class Animal3(nn.Module):
+    def __init__(self, in_channels, num_classes):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 16, 3, padding='valid')
+        self.maxp0 = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(16, 16, 3, padding='valid')
+        self.maxp1 = nn.MaxPool2d(2, 2)
+        self.conv3 = nn.Conv2d(16, 32, 3, padding='valid') 
+        self.maxp2 = nn.MaxPool2d(2, 2)
+        self.conv4 = nn.Conv2d(32, 64, 3, padding='valid')
+        self.maxp3 = nn.MaxPool2d(2, 2)
+        self.conv5 = nn.Conv2d(64, 64, 3, padding='valid')
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(12544 , 512) # 12544 = 64*7*7
+        self.act = nn.ReLU()
+        self.dropout = nn.Dropout(0.3)
+        self.fc2 = nn.Linear(512, num_classes)
+        self.softmax = nn.Softmax(dim=1)
+    
+    def forward(self, x):
+        x = F.relu(self.conv1(x))   
+        x = self.maxp0(x)
+        x = F.relu(self.conv2(x))
+        x = self.maxp1(x)
+        x = F.relu(self.conv3(x))
+        x = self.maxp2(x)
+        x = F.relu(self.conv4(x))
+        x = self.maxp3(x)
+        x = F.relu(self.conv5(x))
+        x = self.flatten(x)
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        x = self.softmax(x)
+        return x
+        
+    def validation_step(self,val_loader,criterion,device,accMetric,writer,epoch,num_classes):
+        valSteps = len(val_loader)
+        val_accs = 0.0
+        val_losses = 0.0
+        allLabels = []
+        allPreds = []
+        for valStep, (images,labels) in enumerate(val_loader):
+            with torch.no_grad():
+                print(f'Validation rogeression is :{valStep*100/valSteps:.3f}%',end='\r')
+                images = images.to(device)
+                labels = labels.to(device)
+                outputs = self(images)
+                preds = torch.argmax(outputs, dim=1)
+                val_acc = accMetric(preds, labels)
+                val_accs += val_acc
+                val_loss = criterion(outputs, labels)
+                val_losses += val_loss
+                allLabels.append(labels)
+                allPreds.append(preds)
+            if writer is not None:
+                writer.add_scalar('Accuracy/val_step', val_acc, epoch*valSteps+valStep)
+                writer.add_scalar('Loss/val_step', val_loss, epoch*valSteps+valStep)
+        if writer is not None:
+            writer.add_scalar('Accuracy/val_epoch', val_accs/valSteps, epoch)
+            writer.add_scalar('Loss/val_epoch', val_losses/valSteps, epoch)
+            writClassAccuracies(allLabels,allPreds,writer,epoch,num_classes,'val_epoch')
+            drawConfusionMatrix(allLabels,allPreds,writer,epoch,num_classes,traintype='validation')
+        print(f'Validation Loss: {val_losses/valSteps} Validation Accuracy: {val_accs/valSteps}')
+
+    def fit(self, train_loader, val_loader, epochs, optimizer, criterion,device,writer,accMetric,num_classes,init_epoch=0):
+        trainsteps = len(train_loader)
+        for epoch in range(init_epoch,init_epoch+epochs):
+            print('Epoch:', epoch)
+            self.train()
+            train_loss = 0.0
+            train_accs = 0.0
+            allLabels = []
+            allPreds = []
+            for trainingStep, (images, labels) in enumerate(train_loader):
+                print(f'Progeression is :{trainingStep*100/trainsteps:.3f}%',end='\r')
+                images = images.to(device)
+                labels = labels.to(device)
+                optimizer.zero_grad()
+                outputs = self(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                train_loss += loss.item()
+                if writer is not None:
+                    writer.add_scalar('Loss/train_step', loss, epoch*trainsteps+trainingStep)
+                
+                preds = torch.argmax(outputs, dim=1)
+                allLabels.append(labels)
+                allPreds.append(preds)
+                train_acc = accMetric(preds, labels)
+                train_accs += train_acc
+                if writer is not None:
+                    writer.add_scalar('Accuracy/train_step', train_acc, epoch*trainsteps+trainingStep)
+            drawConfusionMatrix(allLabels,allPreds,writer,epoch,num_classes)
+            writClassAccuracies(allLabels,allPreds,writer,epoch,num_classes,'train_epoch')
+            if writer is not None:
+                writer.add_scalar('Loss/train_epoch', train_loss/trainsteps, epoch)
+                writer.add_scalar('Accuracy/train_epoch', train_accs/trainsteps, epoch)
+            print(f'Training Loss: {train_loss/trainsteps:.4f} Training Accuracy: {train_accs/trainsteps:.4f}')
+            self.validation_step(val_loader,criterion,device,accMetric,writer,epoch,num_classes)
+
+    
